@@ -4,13 +4,11 @@ namespace Rdanusha\LaravelElasticEmail;
 
 use GuzzleHttp\ClientInterface;
 use Illuminate\Mail\Transport\Transport;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Swift_Mime_SimpleMessage;
 
 class ElasticTransport extends Transport
 {
-
     /**
      * Guzzle client instance.
      *
@@ -24,13 +22,6 @@ class ElasticTransport extends Transport
      * @var string
      */
     protected $key;
-
-    /**
-     * The Elastic Email username.
-     *
-     * @var string
-     */
-    protected $account;
 
     /**
      * THe Elastic Email API end-point.
@@ -48,11 +39,10 @@ class ElasticTransport extends Transport
      *
      * @return void
      */
-    public function __construct(ClientInterface $client, $key, $account)
+    public function __construct(ClientInterface $client, $key)
     {
         $this->client = $client;
         $this->key = $key;
-        $this->account = $account;
     }
 
     /**
@@ -60,12 +50,10 @@ class ElasticTransport extends Transport
      */
     public function send(Swift_Mime_SimpleMessage $message, &$failedRecipients = null)
     {
-
         $this->beforeSendPerformed($message);
 
         $data = [
-            'apikey' => $this->key,
-            'account' => $this->account,
+            'apiKey' => $this->key,
             'msgTo' => $this->getEmailAddresses($message),
             'msgCC' => $this->getEmailAddresses($message, 'getCc'),
             'msgBcc' => $this->getEmailAddresses($message, 'getBcc'),
@@ -77,9 +65,8 @@ class ElasticTransport extends Transport
             'subject' => $message->getSubject(),
             'bodyHtml' => $message->getBody(),
             'bodyText' => $this->getText($message),
-
+            'isTransactional' => $message->getPriority() == 1 ? true : false,
         ];
-
 
         $attachments = $message->getChildren();
         $attachmentCount = $this->checkAttachmentCount($attachments);
@@ -88,14 +75,14 @@ class ElasticTransport extends Transport
         }
         $ch = curl_init();
 
-        curl_setopt_array($ch, array(
+        curl_setopt_array($ch, [
             CURLOPT_URL => $this->url,
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => $data,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HEADER => false,
-            CURLOPT_SSL_VERIFYPEER => false
-        ));
+            CURLOPT_SSL_VERIFYPEER => false,
+        ]);
 
         $result = curl_exec($ch);
         curl_close($ch);
@@ -107,9 +94,8 @@ class ElasticTransport extends Transport
         return $result;
     }
 
-
     /**
-     * Add attachments to post data array
+     * Add attachments to post data array.
      * @param $attachments
      * @param $data
      * @return mixed
@@ -118,7 +104,7 @@ class ElasticTransport extends Transport
     {
         if (is_array($attachments) && count($attachments) > 0) {
             $i = 1;
-            foreach ($attachments AS $attachment) {
+            foreach ($attachments as $attachment) {
                 if ($attachment instanceof \Swift_Attachment) {
                     $attachedFile = $attachment->getBody();
                     $fileName = $attachment->getFilename();
@@ -136,23 +122,22 @@ class ElasticTransport extends Transport
         return $data;
     }
 
-
     /**
-     * Check Swift_Attachment count
+     * Check Swift_Attachment count.
      * @param $attachments
      * @return bool
      */
     public function checkAttachmentCount($attachments)
     {
         $count = 0;
-        foreach ($attachments AS $attachment) {
+        foreach ($attachments as $attachment) {
             if ($attachment instanceof \Swift_Attachment) {
                 $count++;
             }
         }
+
         return $count;
     }
-
 
     /**
      * Get the plain text part.
@@ -193,11 +178,12 @@ class ElasticTransport extends Transport
         if (is_array($data)) {
             return implode(',', array_keys($data));
         }
+
         return '';
     }
 
     /**
-     * delete temp attachment files
+     * delete temp attachment files.
      * @param $data
      * @param $count
      */
